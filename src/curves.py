@@ -1,5 +1,6 @@
+import sys
 import maya.api.OpenMaya as om
-
+import pymel.core as pmc
 
 def maya_useNewAPI():
     pass
@@ -24,11 +25,12 @@ class Node(om.MPxNode):
     @staticmethod
     def initialize():
         tAttr = om.MFnTypedAttribute()
+        mAttr = om.MFnMatrixAttribute()
 
-        Node.aMatrices = tAttr.create(
-            'matrices', 'ms', om.MFnMatrixData.kMatrix)
-        tAttr.readable = False
-        tAttr.array = True
+        Node.aMatrices = mAttr.create(
+            'matrices', 'ms', om.MFnMatrixAttribute.kDouble)
+        mAttr.readable = False
+        mAttr.array = True
         Node.addAttribute(Node.aMatrices)
 
         Node.aOutCurve = tAttr.create(
@@ -48,8 +50,6 @@ class Node(om.MPxNode):
             while True:
                 mat = matricesHandle.inputValue().asMatrix()
 
-                print mat
-                print
                 p = om.MPoint(0, 0, 0, 1)
                 points.append(p*mat)
                 p = om.MPoint(0, 0.1, 0, 1)
@@ -71,6 +71,29 @@ class Node(om.MPxNode):
             data.setClean(plug)
 
 
+class createCurveCmd(om.MPxCommand):
+    commandName = 'createCurve'
+    
+    def __init__(self):
+        om.MPxCommand.__init__(self)
+        
+    @staticmethod
+    def create():
+        return createCurveCmd()
+        
+    def doIt(self, args):
+        selected = pmc.ls(sl=True)
+        creatorNode = pmc.createNode('controlCurveCreator')
+        fitNode = pmc.createNode('fitBspline')
+        curveNode = pmc.createNode('nurbsCurve')
+        
+        for i,t in enumerate(selected):
+            t.matrix >> creatorNode.matrices[i]
+            
+        creatorNode.outCurve >> fitNode.inputCurve
+        fitNode.outputCurve >> curveNode.create
+        fitNode.tolerance.set(0.01)
+        
 
 ##########################################################
 # Plug-in initialization.
@@ -90,6 +113,15 @@ def initializePlugin(mobject):
         sys.stderr.write(
             'Failed to register node: ' + Node.nodeName)
         raise
+        
+    try:
+        mplugin.registerCommand(
+            createCurveCmd.commandName,
+            createCurveCmd.create)
+    except:
+        sys.stderr.write(
+            'Failed to register createCurveCmd: ' + createCurveCmd.commandName)
+        raise
 
 
 def uninitializePlugin(mobject):
@@ -101,3 +133,11 @@ def uninitializePlugin(mobject):
         sys.stderr.write(
             'Failed to deregister node: ' + Node.nodeName)
         raise
+        
+    try:
+        mplugin.deregisterCommand(createCurveCmd.commandName)
+    except:
+        sys.stderr.write(
+            'Failed to unregister createCurveCmd: ' + createCurveCmd.commandName)
+        raise
+
